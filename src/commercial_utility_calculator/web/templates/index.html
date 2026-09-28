@@ -1,0 +1,434 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Gewerbe-Betriebskosten Cockpit | Prüffähige Abrechnung (§ 259 BGB)</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <style>
+    body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; }
+    .badge-pass { background-color: #dcfce7; color: #15803d; border: 1px solid #86efac; }
+    .badge-opted { background-color: #eff6ff; color: #1d4ed8; border: 1px solid #bfdbfe; }
+    .badge-exempt { background-color: #fef3c7; color: #b45309; border: 1px solid #fde68a; }
+  </style>
+</head>
+<body class="bg-slate-50 text-slate-900 min-h-screen">
+  <!-- Header -->
+  <header class="bg-slate-900 text-white shadow-md border-b border-slate-800">
+    <div class="max-w-7xl mx-auto px-4 py-4 flex flex-col md:flex-row justify-between items-center gap-4">
+      <div>
+        <div class="flex items-center gap-3">
+          <span class="text-2xl font-bold tracking-tight text-white">Gewerbe-Betriebskosten Cockpit</span>
+          <span class="text-xs bg-blue-600 text-white px-2 py-0.5 rounded font-mono font-semibold">§ 259 BGB AUDIT-PROOF</span>
+        </div>
+        <p class="text-xs text-slate-400 mt-1">Deterministische Umlage-Engine für deutsche Gewerbeimmobilien (BGH-konform, kein LLM im Rechenpfad)</p>
+      </div>
+      <div class="flex items-center gap-3">
+        <a href="/api/download-template" class="text-xs bg-slate-800 hover:bg-slate-700 text-slate-200 px-3 py-2 rounded border border-slate-700 font-medium transition">
+          Muster-Excel laden
+        </a>
+        <button onclick="document.getElementById('upload-modal').classList.remove('hidden')" class="text-xs bg-slate-800 hover:bg-slate-700 text-slate-200 px-3 py-2 rounded border border-slate-700 font-medium transition">
+          Eigene Datei hochladen
+        </button>
+        <a href="/api/download-excel" class="text-xs bg-emerald-600 hover:bg-emerald-500 text-white px-4 py-2 rounded font-semibold shadow transition flex items-center gap-2">
+          <span>Audit-Excel herunterladen</span>
+          <span class="text-emerald-200 text-[10px]">(mit Formeln)</span>
+        </a>
+      </div>
+    </div>
+  </header>
+
+  <!-- Main Container -->
+  <main class="max-w-7xl mx-auto px-4 py-6 space-y-6">
+
+    <!-- Hard Test Gates Banner -->
+    <div class="bg-white rounded-lg p-4 shadow-sm border border-slate-200">
+      <div class="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+        <div>
+          <h2 class="text-sm font-bold uppercase tracking-wider text-slate-500">Automatisierte Revisions-Gates (Audit Gates)</h2>
+          <p class="text-xs text-slate-500">Vor Berichtserstellung verifizierte mathematische und gesetzliche Invarianten:</p>
+        </div>
+        <div class="flex flex-wrap gap-2">
+          <span class="badge-pass px-2.5 py-1 rounded text-xs font-semibold flex items-center gap-1.5" id="gate-penny">
+            <span>✓</span> Cent-Gleichgewicht (0,00 € Diff)
+          </span>
+          <span class="badge-pass px-2.5 py-1 rounded text-xs font-semibold flex items-center gap-1.5" id="gate-area">
+            <span>✓</span> Flächen-Kontinuität (365/365 Tage)
+          </span>
+          <span class="badge-pass px-2.5 py-1 rounded text-xs font-semibold flex items-center gap-1.5" id="gate-positive">
+            <span>✓</span> Nicht-Negativität
+          </span>
+          <span class="badge-pass px-2.5 py-1 rounded text-xs font-semibold flex items-center gap-1.5" id="gate-meter">
+            <span>✓</span> Zähler-Erhaltungssatz
+          </span>
+        </div>
+      </div>
+    </div>
+
+    <!-- Summary KPI Cards -->
+    <div class="grid grid-cols-2 md:grid-cols-4 gap-4">
+      <div class="bg-white p-4 rounded-lg shadow-sm border border-slate-200">
+        <span class="text-xs font-medium text-slate-500 uppercase">Mietfläche Gesamt</span>
+        <div class="text-2xl font-bold text-slate-900 mt-1" id="kpi-sqm">-- m²</div>
+        <span class="text-xs text-slate-400" id="kpi-spaces">-- Mieteinheiten</span>
+      </div>
+      <div class="bg-white p-4 rounded-lg shadow-sm border border-slate-200">
+        <span class="text-xs font-medium text-slate-500 uppercase">Leerstands-Absorption</span>
+        <div class="text-2xl font-bold text-amber-600 mt-1" id="kpi-vacancy">-- %</div>
+        <span class="text-xs text-slate-400" id="kpi-vacancy-sqmdays">Vom Eigentümer absorbiert</span>
+      </div>
+      <div class="bg-white p-4 rounded-lg shadow-sm border border-slate-200">
+        <span class="text-xs font-medium text-slate-500 uppercase">Kostenpool Netto</span>
+        <div class="text-2xl font-bold text-slate-900 mt-1" id="kpi-net-costs">-- €</div>
+        <span class="text-xs text-slate-400" id="kpi-gross-costs">Brutto: -- €</span>
+      </div>
+      <div class="bg-white p-4 rounded-lg shadow-sm border border-slate-200">
+        <span class="text-xs font-medium text-slate-500 uppercase">Saldo (Nachzahlung / Guthaben)</span>
+        <div class="text-2xl font-bold text-slate-900 mt-1" id="kpi-balance">-- €</div>
+        <span class="text-xs text-slate-400">Nach Vorauszahlungen</span>
+      </div>
+    </div>
+
+    <!-- Tabs Navigation -->
+    <div class="border-b border-slate-200 flex gap-4">
+      <button onclick="switchTab('tenants')" id="tab-btn-tenants" class="pb-2 text-sm font-semibold border-b-2 border-blue-600 text-blue-600 transition">
+        Mieterabrechnungen (§ 9 UStG)
+      </button>
+      <button onclick="switchTab('costs')" id="tab-btn-costs" class="pb-2 text-sm font-semibold border-b-2 border-transparent text-slate-500 hover:text-slate-800 transition">
+        Kostenarten & Kostenkreise
+      </button>
+      <button onclick="switchTab('spaces')" id="tab-btn-spaces" class="pb-2 text-sm font-semibold border-b-2 border-transparent text-slate-500 hover:text-slate-800 transition">
+        Flächen & Leerstands-Slices
+      </button>
+      <button onclick="switchTab('meters')" id="tab-btn-meters" class="pb-2 text-sm font-semibold border-b-2 border-transparent text-slate-500 hover:text-slate-800 transition">
+        Zählerbaum & Differenzmessung
+      </button>
+    </div>
+
+    <!-- Tab 1: Tenants -->
+    <div id="tab-tenants" class="bg-white rounded-lg shadow-sm border border-slate-200 overflow-hidden">
+      <div class="p-4 border-b border-slate-100 flex justify-between items-center bg-slate-50">
+        <h3 class="text-sm font-bold text-slate-800">Mieterabrechnungen mit Ausweis Vorsteuerabzug & Vorauszahlungssaldo</h3>
+        <span class="text-xs text-slate-500" id="tenants-count">-- Parteien</span>
+      </div>
+      <div class="overflow-x-auto">
+        <table class="w-full text-left text-xs">
+          <thead class="bg-slate-100 text-slate-700 font-semibold border-b border-slate-200">
+            <tr>
+              <th class="py-3 px-4">Mieter / Partei</th>
+              <th class="py-3 px-4">USt-Status (§ 9 UStG)</th>
+              <th class="py-3 px-4 text-right">Anteil Netto</th>
+              <th class="py-3 px-4 text-right">MwSt (19%)</th>
+              <th class="py-3 px-4 text-right">Abrechnungsbetrag</th>
+              <th class="py-3 px-4 text-right">Vorauszahlung</th>
+              <th class="py-3 px-4 text-right">Abrechnungssaldo</th>
+            </tr>
+          </thead>
+          <tbody id="tenants-table-body" class="divide-y divide-slate-100 font-mono">
+            <tr><td colspan="7" class="py-6 text-center text-slate-400 font-sans">Lade Abrechnungsdaten...</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+    <!-- Tab 2: Costs -->
+    <div id="tab-costs" class="hidden bg-white rounded-lg shadow-sm border border-slate-200 overflow-hidden">
+      <div class="p-4 border-b border-slate-100 bg-slate-50 flex justify-between items-center">
+        <h3 class="text-sm font-bold text-slate-800">Eingangsrechnungen & Geltungsbereiche (Mehrhausanlagen-Umlage)</h3>
+        <span class="text-xs text-slate-500" id="costs-count">-- Rechnungen</span>
+      </div>
+      <div class="overflow-x-auto">
+        <table class="w-full text-left text-xs">
+          <thead class="bg-slate-100 text-slate-700 font-semibold border-b border-slate-200">
+            <tr>
+              <th class="py-3 px-4">Rechnungs-ID</th>
+              <th class="py-3 px-4">Kostenkategorie</th>
+              <th class="py-3 px-4">Kostenkreis / Scope</th>
+              <th class="py-3 px-4">Zeitraum</th>
+              <th class="py-3 px-4 text-right">Nettobetrag</th>
+              <th class="py-3 px-4 text-right">USt-Satz</th>
+              <th class="py-3 px-4 text-right">Bruttobetrag</th>
+            </tr>
+          </thead>
+          <tbody id="costs-table-body" class="divide-y divide-slate-100 font-mono"></tbody>
+        </table>
+      </div>
+    </div>
+
+    <!-- Tab 3: Spaces -->
+    <div id="tab-spaces" class="hidden bg-white rounded-lg shadow-sm border border-slate-200 overflow-hidden">
+      <div class="p-4 border-b border-slate-100 bg-slate-50">
+        <h3 class="text-sm font-bold text-slate-800">Raum- und Mietflächenaufteilung (Unterjährige Flächenänderungen)</h3>
+      </div>
+      <div class="overflow-x-auto">
+        <table class="w-full text-left text-xs">
+          <thead class="bg-slate-100 text-slate-700 font-semibold border-b border-slate-200">
+            <tr>
+              <th class="py-3 px-4">Raum-ID</th>
+              <th class="py-3 px-4">Gebäude / Etage</th>
+              <th class="py-3 px-4 text-right">Fläche (m²)</th>
+              <th class="py-3 px-4">Nutzer / Mieter</th>
+              <th class="py-3 px-4">Aktiv Von - Bis</th>
+              <th class="py-3 px-4 text-right">Tage</th>
+              <th class="py-3 px-4 text-right">m²-Tage</th>
+              <th class="py-3 px-4">Status</th>
+            </tr>
+          </thead>
+          <tbody id="spaces-table-body" class="divide-y divide-slate-100 font-mono"></tbody>
+        </table>
+      </div>
+    </div>
+
+    <!-- Tab 4: Meters -->
+    <div id="tab-meters" class="hidden bg-white rounded-lg shadow-sm border border-slate-200 overflow-hidden">
+      <div class="p-4 border-b border-slate-100 bg-slate-50">
+        <h3 class="text-sm font-bold text-slate-800">Zählerhierarchie, Vorwegabzug & Angleichungsfaktor</h3>
+      </div>
+      <div class="overflow-x-auto">
+        <table class="w-full text-left text-xs">
+          <thead class="bg-slate-100 text-slate-700 font-semibold border-b border-slate-200">
+            <tr>
+              <th class="py-3 px-4">Zähler-ID</th>
+              <th class="py-3 px-4">Medium</th>
+              <th class="py-3 px-4">Übergeordneter Zähler</th>
+              <th class="py-3 px-4">Zugeordnete Räume</th>
+              <th class="py-3 px-4 text-right">Jahresverbrauch</th>
+              <th class="py-3 px-4">Typ / Status</th>
+            </tr>
+          </thead>
+          <tbody id="meters-table-body" class="divide-y divide-slate-100 font-mono"></tbody>
+        </table>
+      </div>
+    </div>
+
+  </main>
+
+  <!-- Upload Modal -->
+  <div id="upload-modal" class="hidden fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+    <div class="bg-white rounded-xl max-w-lg w-full p-6 shadow-2xl border border-slate-200">
+      <div class="flex justify-between items-center mb-4">
+        <h3 class="text-base font-bold text-slate-900">Eigene Abrechnungsdaten hochladen</h3>
+        <button onclick="document.getElementById('upload-modal').classList.add('hidden')" class="text-slate-400 hover:text-slate-600 text-lg font-bold">&times;</button>
+      </div>
+      <p class="text-xs text-slate-600 mb-4">
+        Laden Sie eine Excel-Datei (.xlsx) mit den Tabellen <code>Raeume</code>, <code>Mietvertraege</code>, <code>Rechnungen</code>, <code>Zaehler</code> hoch.
+      </p>
+      <form id="upload-form" onsubmit="handleUpload(event)" class="space-y-4">
+        <div class="border-2 border-dashed border-slate-300 rounded-lg p-6 text-center hover:border-blue-500 transition cursor-pointer bg-slate-50">
+          <input type="file" id="file-input" name="file" accept=".xlsx,.xls" class="w-full text-xs text-slate-500 file:mr-4 file:py-2 file:px-4 file:rounded-md file:border-0 file:text-xs file:font-semibold file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100 cursor-pointer" required>
+        </div>
+        <div class="flex justify-end gap-2 pt-2">
+          <button type="button" onclick="document.getElementById('upload-modal').classList.add('hidden')" class="px-4 py-2 text-xs font-semibold text-slate-600 hover:bg-slate-100 rounded-lg transition">Abbrechen</button>
+          <button type="submit" id="upload-btn" class="px-5 py-2 text-xs font-semibold text-white bg-blue-600 hover:bg-blue-700 rounded-lg shadow transition">Berechnen & Verifizieren</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <script>
+    let appData = null;
+
+    function formatMoney(val) {
+      return new Intl.NumberFormat('de-DE', { style: 'currency', currency: 'EUR' }).format(val);
+    }
+
+    function formatNumber(val, decimals = 2) {
+      return new Intl.NumberFormat('de-DE', { minimumFractionDigits: decimals, maximumFractionDigits: decimals }).format(val);
+    }
+
+    async function loadBenchmark() {
+      try {
+        const res = await fetch('/api/benchmark');
+        appData = await res.json();
+        renderDashboard(appData);
+      } catch (err) {
+        console.error("Fehler beim Laden:", err);
+      }
+    }
+
+    function renderDashboard(data) {
+      // Summary
+      document.getElementById('kpi-sqm').innerText = formatNumber(data.summary.total_sqm, 1) + ' m²';
+      document.getElementById('kpi-spaces').innerText = data.summary.space_count + ' Mieteinheiten in 3 Gebäuden';
+      document.getElementById('kpi-vacancy').innerText = formatNumber(data.summary.vacancy_percentage, 1) + ' %';
+      document.getElementById('kpi-vacancy-sqmdays').innerText = formatNumber(data.summary.vacancy_sqm_days, 0) + ' m²-Tage Eigentümerlast';
+      document.getElementById('kpi-net-costs').innerText = formatMoney(data.summary.total_net_eur);
+      document.getElementById('kpi-gross-costs').innerText = 'Brutto: ' + formatMoney(data.summary.total_gross_eur);
+      document.getElementById('kpi-balance').innerText = formatMoney(data.summary.total_balance_due_eur);
+
+      // Invariants
+      updateGate('gate-penny', data.invariants.penny_balance, 'Cent-Gleichgewicht (0,00 € Diff)');
+      updateGate('gate-area', data.invariants.area_continuity, 'Flächen-Kontinuität (' + data.summary.total_days + ' Tage)');
+      updateGate('gate-positive', data.invariants.non_negative, 'Nicht-Negativität');
+      updateGate('gate-meter', data.invariants.meter_conservation, 'Zähler-Erhaltungssatz');
+
+      // Render Tables
+      renderTenants(data.tenants);
+      renderCosts(data.invoices);
+      renderSpaces(data.slices);
+      renderMeters(data.meters);
+    }
+
+    function updateGate(id, passed, label) {
+      const el = document.getElementById(id);
+      if (passed) {
+        el.className = 'badge-pass px-2.5 py-1 rounded text-xs font-semibold flex items-center gap-1.5';
+        el.innerHTML = '<span>✓</span> ' + label;
+      } else {
+        el.className = 'bg-red-100 text-red-700 border border-red-300 px-2.5 py-1 rounded text-xs font-semibold flex items-center gap-1.5';
+        el.innerHTML = '<span>✗</span> Invariante verletzt: ' + label;
+      }
+    }
+
+    function renderTenants(tenants) {
+      const tbody = document.getElementById('tenants-table-body');
+      tbody.innerHTML = '';
+      document.getElementById('tenants-count').innerText = tenants.length + ' Parteien';
+
+      tenants.forEach(t => {
+        const tr = document.createElement('tr');
+        tr.className = 'hover:bg-slate-50 transition';
+        const isVacancy = t.tenant_id === 'LANDLORD_VACANCY';
+        const taxBadge = t.vat_opt_in 
+          ? '<span class="badge-opted text-[11px] px-2 py-0.5 rounded font-sans font-medium">Optiert (§ 9, 19%)</span>'
+          : '<span class="badge-exempt text-[11px] px-2 py-0.5 rounded font-sans font-medium">Befreit (Brutto)</span>';
+        
+        const balanceColor = t.balance_due_eur > 0 ? 'text-red-600 font-bold' : (t.balance_due_eur < 0 ? 'text-emerald-600 font-bold' : 'text-slate-700');
+        const balanceLabel = t.balance_due_eur > 0 ? 'Nachzahlung: ' : (t.balance_due_eur < 0 ? 'Guthaben: ' : '');
+
+        tr.innerHTML = `
+          <td class="py-3 px-4 font-sans font-medium text-slate-900 ${isVacancy ? 'text-amber-800 font-bold' : ''}">
+            ${t.tenant_name}
+            <div class="text-[11px] text-slate-400 font-mono">${t.tenant_id}</div>
+          </td>
+          <td class="py-3 px-4 font-sans">${taxBadge}</td>
+          <td class="py-3 px-4 text-right">${formatMoney(t.total_net_eur)}</td>
+          <td class="py-3 px-4 text-right text-slate-500">${formatMoney(t.total_vat_eur)}</td>
+          <td class="py-3 px-4 text-right font-semibold text-slate-900">${formatMoney(t.total_billed_eur)}</td>
+          <td class="py-3 px-4 text-right text-slate-600">${formatMoney(t.total_prepayments_eur)}</td>
+          <td class="py-3 px-4 text-right ${balanceColor}">
+            <span class="text-[10px] font-sans block">${balanceLabel}</span>
+            ${formatMoney(Math.abs(t.balance_due_eur))}
+          </td>
+        `;
+        tbody.appendChild(tr);
+      });
+    }
+
+    function renderCosts(invoices) {
+      const tbody = document.getElementById('costs-table-body');
+      tbody.innerHTML = '';
+      document.getElementById('costs-count').innerText = invoices.length + ' Rechnungen';
+
+      invoices.forEach(inv => {
+        const tr = document.createElement('tr');
+        tr.className = 'hover:bg-slate-50 transition';
+        tr.innerHTML = `
+          <td class="py-3 px-4 font-mono text-slate-600">${inv.invoice_id}</td>
+          <td class="py-3 px-4 font-sans font-medium text-slate-900">${inv.cost_category}</td>
+          <td class="py-3 px-4 font-sans"><span class="bg-slate-200 text-slate-700 px-2 py-0.5 rounded text-[11px] font-mono">${inv.cost_circle_scope}</span></td>
+          <td class="py-3 px-4 text-slate-500">${inv.billing_start} bis ${inv.billing_end}</td>
+          <td class="py-3 px-4 text-right font-medium text-slate-900">${formatMoney(inv.net_amount_eur)}</td>
+          <td class="py-3 px-4 text-right text-slate-500">${formatNumber(inv.vat_rate_percent, 1)} %</td>
+          <td class="py-3 px-4 text-right text-slate-700">${formatMoney(inv.gross_amount_eur)}</td>
+        `;
+        tbody.appendChild(tr);
+      });
+    }
+
+    function renderSpaces(slices) {
+      const tbody = document.getElementById('spaces-table-body');
+      tbody.innerHTML = '';
+
+      slices.forEach(s => {
+        const tr = document.createElement('tr');
+        tr.className = 'hover:bg-slate-50 transition';
+        const statusBadge = s.is_vacancy
+          ? '<span class="bg-amber-100 text-amber-800 text-[11px] px-2 py-0.5 rounded font-sans font-semibold">Leerstand</span>'
+          : '<span class="bg-emerald-100 text-emerald-800 text-[11px] px-2 py-0.5 rounded font-sans font-semibold">Vermietet</span>';
+
+        tr.innerHTML = `
+          <td class="py-3 px-4 font-mono text-slate-700">${s.space_id}</td>
+          <td class="py-3 px-4 font-sans text-slate-600">${s.building_id || 'Campus'} / Etage ${s.floor ?? 1}</td>
+          <td class="py-3 px-4 text-right font-medium">${formatNumber(s.area_sqm)} m²</td>
+          <td class="py-3 px-4 font-sans ${s.is_vacancy ? 'text-amber-800 font-semibold' : 'text-slate-800'}">${s.tenant_name}</td>
+          <td class="py-3 px-4 text-slate-500">${s.start_date} bis ${s.end_date}</td>
+          <td class="py-3 px-4 text-right">${s.days}</td>
+          <td class="py-3 px-4 text-right font-semibold text-slate-900">${formatNumber(s.sqm_days)}</td>
+          <td class="py-3 px-4">${statusBadge}</td>
+        `;
+        tbody.appendChild(tr);
+      });
+    }
+
+    function renderMeters(meters) {
+      const tbody = document.getElementById('meters-table-body');
+      tbody.innerHTML = '';
+
+      meters.forEach(m => {
+        const tr = document.createElement('tr');
+        tr.className = 'hover:bg-slate-50 transition';
+        const isRoot = !m.parent_meter_id;
+        const typeBadge = isRoot 
+          ? '<span class="bg-purple-100 text-purple-800 text-[11px] px-2 py-0.5 rounded font-sans font-semibold">Hauptzähler (Grid Feed)</span>'
+          : '<span class="bg-blue-100 text-blue-800 text-[11px] px-2 py-0.5 rounded font-sans font-semibold">Unterzähler (Submeter)</span>';
+
+        tr.innerHTML = `
+          <td class="py-3 px-4 font-mono font-medium text-slate-900">
+            ${m.meter_id}
+            <div class="text-[10px] text-slate-400 font-sans">SN: ${m.serial_number}</div>
+          </td>
+          <td class="py-3 px-4 font-sans capitalize">${m.medium}</td>
+          <td class="py-3 px-4 font-mono text-slate-500">${m.parent_meter_id || '— (Wurzel)'}</td>
+          <td class="py-3 px-4 font-sans text-slate-600">${m.served_spaces && m.served_spaces.length ? m.served_spaces.join(', ') : 'Zentral'}</td>
+          <td class="py-3 px-4 text-right font-semibold text-slate-900">${formatNumber(m.consumption)} ${m.unit}</td>
+          <td class="py-3 px-4">${typeBadge}</td>
+        `;
+        tbody.appendChild(tr);
+      });
+    }
+
+    function switchTab(tabId) {
+      ['tenants', 'costs', 'spaces', 'meters'].forEach(t => {
+        document.getElementById('tab-' + t).classList.add('hidden');
+        document.getElementById('tab-btn-' + t).className = 'pb-2 text-sm font-semibold border-b-2 border-transparent text-slate-500 hover:text-slate-800 transition';
+      });
+      document.getElementById('tab-' + tabId).classList.remove('hidden');
+      document.getElementById('tab-btn-' + tabId).className = 'pb-2 text-sm font-semibold border-b-2 border-blue-600 text-blue-600 transition';
+    }
+
+    async function handleUpload(e) {
+      e.preventDefault();
+      const fileInput = document.getElementById('file-input');
+      if (!fileInput.files.length) return;
+
+      const formData = new FormData();
+      formData.append('file', fileInput.files[0]);
+
+      const btn = document.getElementById('upload-btn');
+      btn.innerText = 'Berechne...';
+      btn.disabled = true;
+
+      try {
+        const res = await fetch('/api/upload', { method: 'POST', body: formData });
+        if (!res.ok) {
+          const err = await res.json();
+          alert('Fehler bei der Berechnung: ' + (err.detail || 'Ungültige Datei'));
+          return;
+        }
+        appData = await res.json();
+        renderDashboard(appData);
+        document.getElementById('upload-modal').classList.add('hidden');
+      } catch (err) {
+        alert('Netzwerkfehler: ' + err.message);
+      } finally {
+        btn.innerText = 'Berechnen & Verifizieren';
+        btn.disabled = false;
+      }
+    }
+
+    // Auto-load on page ready
+    document.addEventListener('DOMContentLoaded', loadBenchmark);
+  </script>
+</body>
+</html>
