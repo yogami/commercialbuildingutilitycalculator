@@ -1,0 +1,3 @@
+Rechnungs_ID;Kostenart;Anlagen_ID;Betrag_Netto;USt_Satz;Betrag_Brutto;Zeitraum_Start;Zeitraum_Ende;Kostenkreis
+R-001;Grundsteuer;;3600,00;0,0;3600,00;2025-01-01;2025-12-31;CAMPUS
+R-002;Hausmeister;;4800,00;19,0;5712,00;2025-01-01;2025-12-31;CAMPUS

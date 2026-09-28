@@ -1,0 +1,3 @@
+Vertrag_ID;Mieter_ID;Mieter_Name;Raum_ID;Mietbeginn;Mietende;USt_Option;Vorauszahlung_monatlich
+V-001;M-001;Musterfirma GmbH;SP-101;2025-01-01;2025-12-31;Ja;500,00
+V-002;M-002;Dr. med. Beispiel;SP-201;2025-01-01;2025-12-31;Nein;600,00

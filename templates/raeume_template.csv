@@ -1,0 +1,3 @@
+Raum_ID;Gebaeude_ID;Etage;Raumnummer;Flaeche_qm;Nutzungsart;Kostenkreis
+SP-101;Geb-A;1;101;250,00;Buero;CAMPUS;BLDG-A
+SP-201;Geb-A;2;201;300,00;Praxis;CAMPUS;BLDG-A
