@@ -122,10 +122,11 @@
               <th class="py-3 px-4 text-right">Abrechnungsbetrag</th>
               <th class="py-3 px-4 text-right">Vorauszahlung</th>
               <th class="py-3 px-4 text-right">Abrechnungssaldo</th>
+              <th class="py-3 px-4 text-right text-blue-700">Neue Vorauszahlung (§ 560)</th>
             </tr>
           </thead>
           <tbody id="tenants-table-body" class="divide-y divide-slate-100 font-mono">
-            <tr><td colspan="7" class="py-6 text-center text-slate-400 font-sans">Lade Abrechnungsdaten...</td></tr>
+            <tr><td colspan="8" class="py-6 text-center text-slate-400 font-sans">Lade Abrechnungsdaten...</td></tr>
           </tbody>
         </table>
       </div>
@@ -309,6 +310,9 @@
           <td class="py-3 px-4 text-right ${balanceColor}">
             <span class="text-[10px] font-sans block">${balanceLabel}</span>
             ${formatMoney(Math.abs(t.balance_due_eur))}
+          </td>
+          <td class="py-3 px-4 text-right font-semibold text-blue-700">
+            ${isVacancy ? '—' : formatMoney(t.recommended_new_prepayment_eur) + ' / Mo'}
           </td>
         `;
         tbody.appendChild(tr);

@@ -105,6 +105,10 @@ def _serialize_tenant(st: Any) -> Dict[str, Any]:
         "total_billed_eur": float(st.total_net_eur + st.total_vat_eur if st.vat_opt_in else st.total_gross_eur),
         "total_prepayments_eur": float(st.total_prepayments_eur),
         "balance_due_eur": float(st.balance_due_eur),
+        "recommended_new_prepayment_eur": float(st.recommended_new_prepayment_eur),
+        "street_address": st.street_address,
+        "postal_code": st.postal_code,
+        "city": st.city,
     }
 
 

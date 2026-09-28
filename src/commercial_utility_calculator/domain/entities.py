@@ -52,6 +52,10 @@ class TenantLease(BaseModel):
     end_date: date
     vat_opt_in: bool = True
     monthly_prepayment_eur: Decimal = Field(default=Decimal("0.00"), ge=Decimal("0.00"))
+    street_address: Optional[str] = None
+    postal_code: Optional[str] = None
+    city: Optional[str] = None
+    vat_id: Optional[str] = None
 
     @model_validator(mode="after")
     def validate_dates(self) -> "TenantLease":

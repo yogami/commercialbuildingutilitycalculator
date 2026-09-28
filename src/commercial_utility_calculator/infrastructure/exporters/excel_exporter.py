@@ -213,6 +213,12 @@ class AuditReadyExcelExporter:
         ws.cell(r, 10).number_format = self.MONEY_FORMAT
         ws.cell(r, 10).fill = PatternFill(start_color="FFC7CE", end_color="FFC7CE", fill_type="solid")
 
+        r += 1
+        ws.cell(r, 6, "Neue monatl. Vorauszahlung ab Folgejahr (§ 560 BGB):").font = Font(name="Calibri", size=11, bold=True, color="1F497D")
+        ws.cell(r, 10, f"=ROUND(J{r - 4}/12, 0)").font = Font(name="Calibri", size=11, bold=True, color="1F497D")
+        ws.cell(r, 10).number_format = self.MONEY_FORMAT
+        ws.cell(r, 10).fill = PatternFill(start_color="DCE6F1", end_color="DCE6F1", fill_type="solid")
+
     def _format_header_row(self, ws: openpyxl.worksheet.worksheet.Worksheet, col_count: int) -> None:
         for c in range(1, col_count + 1):
             cell = ws.cell(1, c)

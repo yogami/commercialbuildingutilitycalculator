@@ -38,6 +38,10 @@ class TenantStatement:
     total_gross_eur: Decimal
     total_prepayments_eur: Decimal
     balance_due_eur: Decimal
+    recommended_new_prepayment_eur: Decimal = Decimal("0.00")
+    street_address: Optional[str] = None
+    postal_code: Optional[str] = None
+    city: Optional[str] = None
 
 
 @dataclass
@@ -151,6 +155,9 @@ class CommercialUtilityEngine:
         billed_total = (net_sum + vat_sum) if vat_opt_in else gross_sum
         balance_due = billed_total - prepayments
 
+        rec_prepay = (billed_total / Decimal("12.0")).quantize(Decimal("1.00"), rounding=ROUND_HALF_UP)
+        matching_lease = next((l for l in leases if l.tenant_id == tenant_id), None)
+
         return TenantStatement(
             tenant_id=tenant_id,
             tenant_name=tenant_name,
@@ -162,6 +169,10 @@ class CommercialUtilityEngine:
             total_gross_eur=gross_sum,
             total_prepayments_eur=prepayments,
             balance_due_eur=balance_due,
+            recommended_new_prepayment_eur=rec_prepay,
+            street_address=matching_lease.street_address if matching_lease else None,
+            postal_code=matching_lease.postal_code if matching_lease else None,
+            city=matching_lease.city if matching_lease else None,
         )
 
     def _resolve_tenant_name(self, tenant_id: str, default_name: str) -> str:
