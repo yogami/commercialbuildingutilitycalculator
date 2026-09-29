@@ -4,8 +4,8 @@ import tempfile
 from datetime import date
 from decimal import Decimal
 from pathlib import Path
-from typing import Any, Dict, List, Optional
-from fastapi import FastAPI, File, HTTPException, Request, UploadFile
+from typing import Any, Dict, List, Optional, Tuple
+from fastapi import FastAPI, File, HTTPException, Query, Request, UploadFile
 from fastapi.responses import FileResponse, HTMLResponse
 from fastapi.templating import Jinja2Templates
 
@@ -14,6 +14,7 @@ from commercial_utility_calculator.application.engine import CommercialUtilityEn
 from commercial_utility_calculator.domain.entities import PhysicalSpace
 from commercial_utility_calculator.domain.invariants import InvariantValidator
 from commercial_utility_calculator.infrastructure.exporters.excel_exporter import AuditReadyExcelExporter
+from commercial_utility_calculator.infrastructure.importers.big_marzahn_portfolio_data import get_big_marzahn_2025_data
 from commercial_utility_calculator.infrastructure.importers.spreadsheet_importer import (
     ParsedPropertyData,
     SpreadsheetImporter,
@@ -24,31 +25,54 @@ app = FastAPI(title="Commercial Building Utility Calculator", version="0.1.0")
 TEMPLATES_DIR = Path(__file__).parent / "templates"
 templates = Jinja2Templates(directory=str(TEMPLATES_DIR))
 
-# In-memory store for the active calculation
+# In-memory store for active calculations
 STATE: Dict[str, Any] = {
-    "result": None,
-    "spaces": [],
-    "cached_json": None,
+    "active_dataset": "big_marzahn",
+    "calculations": {},
 }
 
 
-def _get_active_calculation() -> tuple[EngineCalculationResult, List[PhysicalSpace], Dict[str, Any]]:
-    if STATE["result"] is None:
+def _get_active_calculation(
+    dataset: str = "big_marzahn",
+) -> Tuple[EngineCalculationResult, List[PhysicalSpace], Dict[str, Any]]:
+    clean_ds = dataset if dataset in ("big_marzahn", "spree_campus", "uploaded") else "big_marzahn"
+
+    if clean_ds in STATE["calculations"]:
+        entry = STATE["calculations"][clean_ds]
+        return entry["result"], entry["spaces"], entry["cached_json"]
+
+    if clean_ds == "big_marzahn":
+        data = get_big_marzahn_2025_data()
+        b_start = date(2025, 1, 1)
+        b_end = date(2025, 12, 31)
+        name = "B.I.G. Marzahn Gewerbepark (Schwarze-Pumpe-Weg 12-16)"
+    else:
         data = create_spree_campus_benchmark()
-        engine = CommercialUtilityEngine()
-        result = engine.calculate(
-            spaces=data.spaces,
-            meters=data.meters,
-            readings=data.readings,
-            leases=data.leases,
-            invoices=data.invoices,
-            billing_start=date(2025, 1, 1),
-            billing_end=date(2025, 12, 31),
-        )
-        STATE["result"] = result
-        STATE["spaces"] = data.spaces
-        STATE["cached_json"] = _serialize_result(result, data)
-    return STATE["result"], STATE["spaces"], STATE["cached_json"]
+        b_start = date(2025, 1, 1)
+        b_end = date(2025, 12, 31)
+        name = "Spree-Campus Gewerbehof (Demo Benchmark)"
+
+    engine = CommercialUtilityEngine()
+    result = engine.calculate(
+        spaces=data.spaces,
+        meters=data.meters if clean_ds == "spree_campus" else [],
+        readings=data.readings if clean_ds == "spree_campus" else [],
+        leases=data.leases,
+        invoices=data.invoices,
+        billing_start=b_start,
+        billing_end=b_end,
+    )
+    cached_json = _serialize_result(result, data)
+    cached_json["portfolio_name"] = name
+    cached_json["dataset"] = clean_ds
+
+    STATE["calculations"][clean_ds] = {
+        "result": result,
+        "spaces": data.spaces,
+        "cached_json": cached_json,
+    }
+    STATE["active_dataset"] = clean_ds
+    return result, data.spaces, cached_json
 
 
 def _serialize_result(result: EngineCalculationResult, data: ParsedPropertyData) -> Dict[str, Any]:
@@ -60,6 +84,7 @@ def _serialize_result(result: EngineCalculationResult, data: ParsedPropertyData)
     total_net = sum((inv.net_amount_eur for inv in data.invoices), Decimal("0.00"))
     total_gross = sum((inv.gross_amount_eur for inv in data.invoices), Decimal("0.00"))
     total_balance = sum((st.balance_due_eur for st in result.tenant_statements.values()), Decimal("0.00"))
+    total_prepayments = sum((st.total_prepayments_eur for st in result.tenant_statements.values()), Decimal("0.00"))
 
     summary = {
         "total_sqm": float(total_sqm),
@@ -70,6 +95,7 @@ def _serialize_result(result: EngineCalculationResult, data: ParsedPropertyData)
         "vacancy_percentage": float(vac_pct),
         "total_net_eur": float(total_net),
         "total_gross_eur": float(total_gross),
+        "total_prepayments_eur": float(total_prepayments),
         "total_balance_due_eur": float(total_balance),
     }
 
@@ -169,8 +195,8 @@ def healthcheck() -> Dict[str, str]:
 
 
 @app.get("/api/benchmark")
-def get_benchmark_api() -> Dict[str, Any]:
-    _, _, payload = _get_active_calculation()
+def get_benchmark_api(dataset: Optional[str] = Query(default="big_marzahn")) -> Dict[str, Any]:
+    _, _, payload = _get_active_calculation(dataset or "big_marzahn")
     return payload
 
 
@@ -207,10 +233,17 @@ async def upload_excel_api(file: UploadFile = File(...)) -> Dict[str, Any]:
             billing_end=b_end,
         )
 
-        STATE["result"] = result
-        STATE["spaces"] = data.spaces
-        STATE["cached_json"] = _serialize_result(result, data)
-        return STATE["cached_json"]
+        cached_json = _serialize_result(result, data)
+        cached_json["portfolio_name"] = f"Hochgeladen: {file.filename}"
+        cached_json["dataset"] = "uploaded"
+
+        STATE["calculations"]["uploaded"] = {
+            "result": result,
+            "spaces": data.spaces,
+            "cached_json": cached_json,
+        }
+        STATE["active_dataset"] = "uploaded"
+        return cached_json
     except Exception as e:
         raise HTTPException(status_code=400, detail=str(e))
     finally:
@@ -218,8 +251,20 @@ async def upload_excel_api(file: UploadFile = File(...)) -> Dict[str, Any]:
 
 
 @app.get("/api/download-excel")
-def download_excel_api() -> FileResponse:
-    res, spaces, _ = _get_active_calculation()
+def download_excel_api(dataset: Optional[str] = Query(default="big_marzahn")) -> FileResponse:
+    target_ds = dataset or STATE.get("active_dataset", "big_marzahn")
+    res, spaces, _ = _get_active_calculation(target_ds)
+
+    filename = (
+        "B.I.G_Marzahn_Betriebskostenabrechnung_2025_Final.xlsx"
+        if target_ds == "big_marzahn"
+        else (
+            "Gewerbehof_SpreeCampus_Betriebskostenabrechnung_2025.xlsx"
+            if target_ds == "spree_campus"
+            else "Betriebskostenabrechnung_2025_Final.xlsx"
+        )
+    )
+
     with tempfile.NamedTemporaryFile(delete=False, suffix=".xlsx") as tmp:
         tmp_path = tmp.name
 
@@ -229,7 +274,7 @@ def download_excel_api() -> FileResponse:
     return FileResponse(
         path=tmp_path,
         media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-        filename="Gewerbehof_SpreeCampus_Betriebskostenabrechnung_2025.xlsx",
+        filename=filename,
     )
 
 

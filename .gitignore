@@ -14,3 +14,6 @@ wheels/
 .pytest_cache/
 *.xlsx
 !templates/*.xlsx
+
+# Local property data (confidential)
+data/
